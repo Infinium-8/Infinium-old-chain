@@ -176,7 +176,7 @@ jobs:
           echo ::set-output name=file_name::Infinium-${TAG}-${LABEL}.zip          
     # Upload to GH Release
       - name: Upload to GH Release
-        if: github.event_name == 'release' && matrix.deployable
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
