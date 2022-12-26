@@ -16,7 +16,7 @@ get_filename_component(PARENT_DIR ${CMAKE_SOURCE_DIR} DIRECTORY)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     option(USE_SQLITE "Builds with SQLite instead of LMDB. 4x slower, but works on 32-bit and mobile platforms" OFF)
-    set(OPENSSL_ROOT ${PARENT_DIR}/openssl)
+    set(OPENSSL_ROOT ${OPENSSL_ROOT})
 else()
     option(USE_SQLITE "Builds with sqlite instead of LMDB. 4x slower, but works on 32-bit and mobile platforms" ON)
     set(OPENSSL_ROOT ${PARENT_DIR}/openssl32)

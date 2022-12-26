@@ -102,3 +102,92 @@ jobs:
         with:
           name: ${{ steps.before_deploy.outputs.artifact_name }}
           path: ./bin/${{ steps.before_deploy.outputs.binary_path }}
+
+          
+  windows_build:
+    name: Windows
+    runs-on: windows-2019
+    env:
+      MSBUILD_PATH: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/MSBuild/Current/Bin"
+      LABEL: windows
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup clcache
+        run: pip install clcache
+
+      - name: Retrieve clcache
+        uses: actions/cache@v1
+        with:
+          path: clcache
+          key: clcache-windows
+
+      - name: Install OpenSSL
+        run: choco install openssl
+        
+      - name: Patch OpenSSL
+        run: |
+          copy "C:\Program Files\OpenSSL-Win64\lib\libcrypto.lib" "C:\Program Files\OpenSSL-Win64\libcrypto.lib"
+          copy "C:\Program Files\OpenSSL-Win64\lib\libssl.lib" "C:\Program Files\OpenSSL-Win64\libssl.lib"
+          
+      - name: Download LMDB
+        run: |
+          cd ../
+          git clone https://github.com/Infinium-dev/lmdb.git          
+            
+      # Install boost
+      - name: Install Boost 1.78.0
+        run: |
+          $link = "https://boost.teeks99.com/bin/1.78.0/boost_1_78_0-msvc-14.2-64.exe"
+          $path = "C:\boost.exe"
+          [Net.WebClient]::new().DownloadFile($link, $path)
+          Start-Process C:\boost.exe -ArgumentList "/DIR=C:\local\boost_1_78_0","/VERYSILENT" -Wait
+          Get-ChildItem C:\local\boost_1_78_0
+        
+      # Configure project with cmake
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake -G "Visual Studio 16 2019" -A x64 .. -DOPENSSL_ROOT="C:/Program Files/OpenSSL-Win64" -DBOOST_ROOT=C:/local/boost_1_78_0
+          
+     # Build for Windows
+      - name: Build
+        run: |
+          $env:CLCACHE_DIR = "$env:GITHUB_WORKSPACE\clcache"
+          $env:PATH = "$env:PATH;$env:MSBUILD_PATH"
+          cd build
+          MSBuild infinium.sln /p:Configuration=Release /p:PlatformToolset=v141 /m
+       
+     # Prepare for deploy
+      - name: Prepare for Deploy
+        id: before_deploy
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash  
+        run: |
+          if [[ "${TAG:5:4}" == "tags" ]]; then export TAG=${TAG:10}; else export TAG=${COMMIT_SHA}; fi
+          cd bin/Release
+          rm -rf Infinium-${TAG}
+          mkdir Infinium-${TAG}
+          cp *.exe Infinium-${TAG}/
+          7z a Infinium-${TAG}-${LABEL}.zip Infinium-${TAG}/
+          echo ::set-output name=binary_path::Infinium-${TAG}
+          echo ::set-output name=artifact_name::Infinium-${TAG}-${LABEL}
+          echo ::set-output name=file_name::Infinium-${TAG}-${LABEL}.zip          
+    # Upload to GH Release
+      - name: Upload to GH Release
+        if: github.event_name == 'release' && matrix.deployable
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+           upload_url: ${{ github.event.release.upload_url }}
+           asset_path: ./bin/Release/${{ steps.before_deploy.outputs.file_name }}
+           asset_name: ${{ steps.before_deploy.outputs.file_name }}
+           asset_content_type: application/zip
+    # Upload to GH Actions Artifacts
+      - name: Upload To GH Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+           name: ${{ steps.before_deploy.outputs.artifact_name }}
+           path: ./bin/Release/${{ steps.before_deploy.outputs.binary_path }}
